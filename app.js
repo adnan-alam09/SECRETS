@@ -3,7 +3,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const md5 = require("md5"); // md5 is for hash password (encryption)
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 
 
@@ -11,7 +12,9 @@ const app = express();
 
 app.use(express.static("public"));
 app.set('view engine', 'ejs');
-app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 
 mongoose.connect("mongodb://localhost:27017/userDB");
 
@@ -27,51 +30,60 @@ const User = new mongoose.model("User", userSchema);
 
 
 
-app.get("/",function(req,res){
+app.get("/", function(req, res) {
   res.render("home");
 });
 
-app.get("/login",function(req,res){
+app.get("/login", function(req, res) {
   res.render("login");
 });
 
-app.get("/register",function(req,res){
+app.get("/register", function(req, res) {
   res.render("register");
 });
 
 //// notice how theres not app.get for the secrets page - this is becasue we only waant to desplay that page if they login or Register
 
 
-app.post("/register", function(req,res){
-  const newUser = new User({
-    email: req.body.username,
-    password: md5(req.body.password)
+app.post("/register", function(req, res) {
+
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+    const newUser = new User({
+      email: req.body.username,
+      password: hash
+    });
+
+    newUser.save(function(err) {
+      if (err) {
+        console.log(err);
+      } else {
+        res.render("secrets"); // if no error in the registration - render the secrets page
+      }
+    });
   });
 
-  newUser.save(function(err){
-    if(err){
-      console.log(err);
-    }else{
-      res.render("secrets"); // if no error in the registration - render the secrets page
-    }
-  });
+
+
 });
 
 
-app.post("/login", function(req,res){
+app.post("/login", function(req, res) {
   // this is what the user is entering
   const username = req.body.username;
   const password = req.body.password;
 
   // now check through database to see if what the user entered is existent
-  User.findOne({email: username},function(err, foundUser){
-    if(err){
+  User.findOne({email: username}, function(err, foundUser) {
+    if (err) {
       console.log(err);
-    }else{
-      if(foundUser){ // if the username exists - then check if the password matches
-        if(foundUser.password === password){
-          res.render("secrets");
-        }
+    } else {
+      if (foundUser) { // if the username exists - then check if the password matches
+        bcrypt.compare(password, foundUser.password, function(err, result) {
+    // result == true
+          if(result === true){
+            res.render("secrets");
+          }
+        });
       }
     }
   });
